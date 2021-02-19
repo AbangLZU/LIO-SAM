@@ -24,7 +24,7 @@ using symbol_shorthand::B; // Bias  (ax,ay,az,gx,gy,gz)
 using symbol_shorthand::G; // GPS pose
 
 /*
-    * A point cloud type that has 6D pose info ([x,y,z,roll,pitch,yaw] intensity is time stamp)
+    * A point cloud type that has 6D pose info ([x,y,z,roll,pitch,yaw] intensity is timestamp stamp)
     */
 struct PointXYZIRPYT
 {
@@ -33,7 +33,7 @@ struct PointXYZIRPYT
     float roll;
     float pitch;
     float yaw;
-    double time;
+    double timestamp;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW   // make sure our new allocators are aligned
 } EIGEN_ALIGN16;                    // enforce SSE padding for correct memory alignment
 
@@ -41,7 +41,7 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIRPYT,
                                    (float, x, x) (float, y, y)
                                    (float, z, z) (float, intensity, intensity)
                                    (float, roll, roll) (float, pitch, pitch) (float, yaw, yaw)
-                                   (double, time, time))
+                                   (double, timestamp, timestamp))
 
 typedef PointXYZIRPYT  PointTypePose;
 
@@ -227,7 +227,7 @@ public:
 
     void laserCloudInfoHandler(const lio_sam::cloud_infoConstPtr& msgIn)
     {
-        // extract time stamp
+        // extract timestamp stamp
         timeLaserInfoStamp = msgIn->header.stamp;
         timeLaserInfoCur = msgIn->header.stamp.toSec();
 
@@ -575,7 +575,7 @@ public:
         for (int i = 0; i < (int)pointSearchIndLoop.size(); ++i)
         {
             int id = pointSearchIndLoop[i];
-            if (abs(copy_cloudKeyPoses6D->points[id].time - timeLaserInfoCur) > historyKeyframeSearchTimeDiff)
+            if (abs(copy_cloudKeyPoses6D->points[id].timestamp - timeLaserInfoCur) > historyKeyframeSearchTimeDiff)
             {
                 loopKeyPre = id;
                 break;
@@ -616,7 +616,7 @@ public:
         loopKeyCur = cloudSize - 1;
         for (int i = cloudSize - 1; i >= 0; --i)
         {
-            if (copy_cloudKeyPoses6D->points[i].time >= loopTimeCur)
+            if (copy_cloudKeyPoses6D->points[i].timestamp >= loopTimeCur)
                 loopKeyCur = round(copy_cloudKeyPoses6D->points[i].intensity);
             else
                 break;
@@ -626,7 +626,7 @@ public:
         loopKeyPre = 0;
         for (int i = 0; i < cloudSize; ++i)
         {
-            if (copy_cloudKeyPoses6D->points[i].time <= loopTimePre)
+            if (copy_cloudKeyPoses6D->points[i].timestamp <= loopTimePre)
                 loopKeyPre = round(copy_cloudKeyPoses6D->points[i].intensity);
             else
                 break;
@@ -831,7 +831,7 @@ public:
         int numPoses = cloudKeyPoses3D->size();
         for (int i = numPoses-1; i >= 0; --i)
         {
-            if (timeLaserInfoCur - cloudKeyPoses6D->points[i].time < 10.0)
+            if (timeLaserInfoCur - cloudKeyPoses6D->points[i].timestamp < 10.0)
                 surroundingKeyPosesDS->push_back(cloudKeyPoses3D->points[i]);
             else
                 break;
@@ -1488,7 +1488,7 @@ public:
         thisPose6D.roll  = latestEstimate.rotation().roll();
         thisPose6D.pitch = latestEstimate.rotation().pitch();
         thisPose6D.yaw   = latestEstimate.rotation().yaw();
-        thisPose6D.time = timeLaserInfoCur;
+        thisPose6D.timestamp = timeLaserInfoCur;
         cloudKeyPoses6D->push_back(thisPose6D);
 
         // cout << "****************************************************" << endl;
@@ -1554,7 +1554,7 @@ public:
     void updatePath(const PointTypePose& pose_in)
     {
         geometry_msgs::PoseStamped pose_stamped;
-        pose_stamped.header.stamp = ros::Time().fromSec(pose_in.time);
+        pose_stamped.header.stamp = ros::Time().fromSec(pose_in.timestamp);
         pose_stamped.header.frame_id = odometryFrame;
         pose_stamped.pose.position.x = pose_in.x;
         pose_stamped.pose.position.y = pose_in.y;

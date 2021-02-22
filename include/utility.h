@@ -17,6 +17,7 @@
 #include <visualization_msgs/MarkerArray.h>
 
 #include <opencv/cv.h>
+#include <cv_bridge/cv_bridge.h>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -38,6 +39,7 @@
 #include <tf/transform_broadcaster.h>
  
 #include <vector>
+#include <unordered_map>
 #include <cmath>
 #include <algorithm>
 #include <queue>

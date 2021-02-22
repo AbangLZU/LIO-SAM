@@ -9,6 +9,8 @@
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/NavSatFix.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <sensor_msgs/Image.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <visualization_msgs/Marker.h>
@@ -72,6 +74,8 @@ public:
     string imuTopic;
     string odomTopic;
     string gpsTopic;
+    string imageTopic;
+    string cameraInfoTopic;
 
     //Frames
     string lidarFrame;
@@ -149,6 +153,9 @@ public:
     float globalMapVisualizationSearchRadius;
     float globalMapVisualizationPoseDensity;
     float globalMapVisualizationLeafSize;
+
+    // flag for using image data
+    bool useImageData;
 
     ParamServer()
     {
@@ -240,6 +247,10 @@ public:
         nh.param<float>("lio_sam/globalMapVisualizationSearchRadius", globalMapVisualizationSearchRadius, 1e3);
         nh.param<float>("lio_sam/globalMapVisualizationPoseDensity", globalMapVisualizationPoseDensity, 10.0);
         nh.param<float>("lio_sam/globalMapVisualizationLeafSize", globalMapVisualizationLeafSize, 1.0);
+
+        nh.param<bool>("lio_sam/useImageData", useImageData, false);
+        nh.param<std::string>("lio_sam/imageTopic", imageTopic, "/image_raw");
+        nh.param<std::string>("lio_sam/cameraInfoTopic", cameraInfoTopic, "/stereo/camera_info");
 
         usleep(100);
     }

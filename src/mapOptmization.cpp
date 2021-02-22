@@ -49,6 +49,10 @@ typedef PointXYZIRPYT  PointTypePose;
 class mapOptimization : public ParamServer
 {
 
+private:
+	bool hasCamInfo;
+	sensor_msgs::CameraInfo camInfo_;
+
 public:
 
     // gtsam
@@ -75,6 +79,7 @@ public:
     ros::Subscriber subCloud;
     ros::Subscriber subGPS;
     ros::Subscriber subLoop;
+    ros::Subscriber subCamInfo;
 
     std::deque<nav_msgs::Odometry> gpsQueue;
     lio_sam::cloud_info cloudInfo;
@@ -166,6 +171,10 @@ public:
         subGPS   = nh.subscribe<nav_msgs::Odometry> (gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
         subLoop  = nh.subscribe<std_msgs::Float64MultiArray>("lio_loop/loop_closure_detection", 1, &mapOptimization::loopInfoHandler, this, ros::TransportHints().tcpNoDelay());
 
+        // subscribe the cameraInfo for image rgb project
+	    hasCamInfo = false;
+	    subCamInfo = nh.subscribe<sensor_msgs::CameraInfo> (cameraInfoTopic, 10, &mapOptimization::camInfoHandler, this, ros::TransportHints().tcpNoDelay());
+
         pubHistoryKeyFrames   = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/icp_loop_closure_history_cloud", 1);
         pubIcpKeyFrames       = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/icp_loop_closure_corrected_cloud", 1);
         pubLoopConstraintEdge = nh.advertise<visualization_msgs::MarkerArray>("/lio_sam/mapping/loop_closure_constraints", 1);
@@ -177,7 +186,9 @@ public:
         downSizeFilterCorner.setLeafSize(mappingCornerLeafSize, mappingCornerLeafSize, mappingCornerLeafSize);
         downSizeFilterSurf.setLeafSize(mappingSurfLeafSize, mappingSurfLeafSize, mappingSurfLeafSize);
         downSizeFilterICP.setLeafSize(mappingSurfLeafSize, mappingSurfLeafSize, mappingSurfLeafSize);
-        downSizeFilterSurroundingKeyPoses.setLeafSize(surroundingKeyframeDensity, surroundingKeyframeDensity, surroundingKeyframeDensity); // for surrounding key poses of scan-to-map optimization
+	    // for surrounding key poses of scan-to-map optimization
+        downSizeFilterSurroundingKeyPoses.setLeafSize(surroundingKeyframeDensity,
+													  surroundingKeyframeDensity, surroundingKeyframeDensity);
 
         allocateMemory();
     }
@@ -233,6 +244,10 @@ public:
 
         // extract info and feature cloud
         cloudInfo = *msgIn;
+
+        sensor_msgs::Image cur_image = msgIn->image_data;
+        ROS_INFO_STREAM("mapOptimization image stamp"<<cur_image.header.stamp);
+
         pcl::fromROSMsg(msgIn->cloud_corner,  *laserCloudCornerLast);
         pcl::fromROSMsg(msgIn->cloud_surface, *laserCloudSurfLast);
 
@@ -264,6 +279,14 @@ public:
     void gpsHandler(const nav_msgs::Odometry::ConstPtr& gpsMsg)
     {
         gpsQueue.push_back(*gpsMsg);
+    }
+
+    void camInfoHandler(const sensor_msgs::CameraInfo::ConstPtr & camInfoMsg){
+	    if (!hasCamInfo){
+	    	camInfo_ = *camInfoMsg;
+	    	hasCamInfo = true;
+	    	ROS_INFO_STREAM("mapOptmization get cameraInfo imformation!!!");
+	    }
     }
 
     void pointAssociateToMap(PointType const * const pi, PointType * const po)
@@ -328,21 +351,6 @@ public:
         thisPose6D.yaw   = transformIn[2];
         return thisPose6D;
     }
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     void visualizeGlobalMapThread()
     {

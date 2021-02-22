@@ -84,6 +84,9 @@ private:
     double timeScanEnd;
     std_msgs::Header cloudHeader;
 
+    ros::Subscriber subImage;
+	sensor_msgs::Image::ConstPtr reveivedImage;
+
 
 public:
     ImageProjection():
@@ -92,6 +95,8 @@ public:
         subImu        = nh.subscribe<sensor_msgs::Imu>(imuTopic, 2000, &ImageProjection::imuHandler, this, ros::TransportHints().tcpNoDelay());
         subOdom       = nh.subscribe<nav_msgs::Odometry>(odomTopic+"_incremental", 2000, &ImageProjection::odometryHandler, this, ros::TransportHints().tcpNoDelay());
         subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 5, &ImageProjection::cloudHandler, this, ros::TransportHints().tcpNoDelay());
+
+        subImage      = nh.subscribe<sensor_msgs::Image>(imageTopic, 5, &ImageProjection::imageHandler, this, ros::TransportHints().tcpNoDelay());
 
         pubExtractedCloud = nh.advertise<sensor_msgs::PointCloud2> ("lio_sam/deskew/cloud_deskewed", 1);
         pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info> ("lio_sam/deskew/cloud_info", 1);
@@ -167,6 +172,11 @@ public:
         // cout << "roll: " << imuRoll << ", pitch: " << imuPitch << ", yaw: " << imuYaw << endl << endl;
     }
 
+    void imageHandler(const sensor_msgs::Image::ConstPtr & imageMsg){
+	    reveivedImage = imageMsg;
+    }
+
+
     void odometryHandler(const nav_msgs::Odometry::ConstPtr& odometryMsg)
     {
         std::lock_guard<std::mutex> lock2(odoLock);
@@ -232,8 +242,8 @@ public:
         cloudHeader = currentCloudMsg.header;
         timeScanCur = cloudHeader.stamp.toSec();
         timeScanEnd = timeScanCur + laserCloudIn->points.back().timestamp;
-	    ROS_INFO_STREAM("Time scan: "<<timeScanCur<<" point end time: "<<laserCloudIn->points.back().timestamp<<
-	                    " Time scan end: "<<timeScanEnd);
+//	    ROS_INFO_STREAM("Time scan: "<<timeScanCur<<" point end time: "<<laserCloudIn->points.back().timestamp<<
+//	                    " Time scan end: "<<timeScanEnd);
 
         // check dense flag
         if (laserCloudIn->is_dense == false)
@@ -591,6 +601,11 @@ public:
     {
         cloudInfo.header = cloudHeader;
         cloudInfo.cloud_deskewed  = publishCloud(&pubExtractedCloud, extractedCloud, cloudHeader.stamp, lidarFrame);
+	    if (useImageData && reveivedImage){
+	    	// use image data set true and image ptr is not null
+	    	cloudInfo.image_data = *reveivedImage;
+	    }
+
         pubLaserCloudInfo.publish(cloudInfo);
     }
 };

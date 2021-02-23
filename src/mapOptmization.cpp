@@ -113,6 +113,8 @@ public:
 	vector<pcl::PointCloud<PointType>::Ptr> cornerCloudKeyFrames;
 	vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;
 
+	vector<pcl::PointCloud<PointType>::Ptr> wholeCloudKeyFrames;
+
 	vector<sensor_msgs::Image> imageList;
 	sensor_msgs::Image currentImage_;
 
@@ -126,6 +128,8 @@ public:
 	pcl::PointCloud<PointType>::Ptr laserCloudSurfLast; // surf feature set from odoOptimization
 	pcl::PointCloud<PointType>::Ptr laserCloudCornerLastDS; // downsampled corner featuer set from odoOptimization
 	pcl::PointCloud<PointType>::Ptr laserCloudSurfLastDS; // downsampled surf featuer set from odoOptimization
+
+	pcl::PointCloud<PointType>::Ptr wholeCloudLast;
 
 	pcl::PointCloud<PointType>::Ptr laserCloudOri;
 	pcl::PointCloud<PointType>::Ptr coeffSel;
@@ -242,6 +246,8 @@ public:
 
 		laserCloudCornerLast.reset(new pcl::PointCloud<PointType>()); // corner feature set from odoOptimization
 		laserCloudSurfLast.reset(new pcl::PointCloud<PointType>()); // surf feature set from odoOptimization
+
+		wholeCloudLast.reset(new pcl::PointCloud<PointType>());
 		laserCloudCornerLastDS.reset(
 				new pcl::PointCloud<PointType>()); // downsampled corner featuer set from odoOptimization
 		laserCloudSurfLastDS.reset(
@@ -290,6 +296,8 @@ public:
 
 		pcl::fromROSMsg(msgIn->cloud_corner, *laserCloudCornerLast);
 		pcl::fromROSMsg(msgIn->cloud_surface, *laserCloudSurfLast);
+		pcl::fromROSMsg(msgIn->cloud_deskewed, *wholeCloudLast);
+
 
 		std::lock_guard<std::mutex> lock(mtx);
 
@@ -467,6 +475,8 @@ public:
 			std::cout << "cv_bridge exception: " << e.what() << std::endl;
 		}
 		cv::Mat cv_mat = cv_ptr->image;
+		std::cout<<"image size is "<<cv_mat.size().width<< " "<<cv_mat.size().height;
+
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr out_cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
 		std::unordered_map<cv::Point, PointType> projection_map;
@@ -508,13 +518,13 @@ public:
 
 	}
 
-	void visualizeRGBCloudThread(){
-		ros::Rate rate(0.3);
-		while (ros::ok()) {
-			rate.sleep();
-			publishRGBCloud();
-		}
-	}
+//	void visualizeRGBCloudThread(){
+//		ros::Rate rate(0.3);
+//		while (ros::ok()) {
+//			rate.sleep();
+//			publishRGBCloud();
+//		}
+//	}
 
 	void visualizeGlobalMapThread() {
 		ros::Rate rate(0.2);
@@ -542,22 +552,27 @@ public:
 			cout << "image list size: " << imageList.size() << endl;
 
 
-			tf::Quaternion tf_q(-0.524045247539, 0.533943315725, -0.47298087709, 0.465371039098);
-			tf::Vector3 tf_trans(0.0911526, 0.0954019, -0.187078);
+			tf::Quaternion tf_q(-0.524045247539, 0.533943315725, -0.47298087709, -0.465371039098);
+			tf::Vector3 tf_trans(0.0967611, -0.175173, -0.111176);
 			tf::Transform cam_to_lidar_tf_(tf_q, tf_trans);
 			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_sur_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_cor_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+//			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_sur_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+//			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_cor_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 			for (int i = 0; i < (int) cloudKeyPoses3D->size(); i++) {
-				auto temp_cloud1 = projectRGBToCloud(cornerCloudKeyFrames[i], imageList[i], cam_to_lidar_tf_);
-				auto temp_cloud2 = projectRGBToCloud(surfCloudKeyFrames[i], imageList[i], cam_to_lidar_tf_);
-				*rgb_cor_cloud += *transformRGBPointCloud(temp_cloud1, &cloudKeyPoses6D->points[i]);
-				*rgb_sur_cloud += *transformRGBPointCloud(temp_cloud2, &cloudKeyPoses6D->points[i]);
+//				auto temp_cloud1 = projectRGBToCloud(cornerCloudKeyFrames[i], imageList[i], cam_to_lidar_tf_);
+//				auto temp_cloud2 = projectRGBToCloud(surfCloudKeyFrames[i], imageList[i], cam_to_lidar_tf_);
+//				*rgb_cor_cloud += *transformRGBPointCloud(temp_cloud1, &cloudKeyPoses6D->points[i]);
+//				*rgb_sur_cloud += *transformRGBPointCloud(temp_cloud2, &cloudKeyPoses6D->points[i]);
+
+				auto temp_cloud2 = projectRGBToCloud(wholeCloudKeyFrames[i], imageList[i], cam_to_lidar_tf_);
+				*rgb_cloud += *transformRGBPointCloud(temp_cloud2, &cloudKeyPoses6D->points[i]);
+
 				cout << "\r" << std::flush << "Processing rgb cloud " << i << " of " << cloudKeyPoses6D->size()
 				     << " ...";
 			}
-			*rgb_cloud+=*rgb_cor_cloud;
-			*rgb_cloud+=*rgb_sur_cloud;
+//			*rgb_cloud+=*rgb_cor_cloud;
+//			*rgb_cloud+=*rgb_sur_cloud;
+
 			pcl::io::savePCDFileASCII(savePCDDirectory + "rgbCloud.pcd", *rgb_cloud);
 
 		}
@@ -592,40 +607,40 @@ public:
 		cout << "Saving map to pcd files completed" << endl;
 	}
 
-	void publishRGBCloud(){
-		if (useImageData){
-			cout << "pose graph size: " << cloudKeyPoses6D->size() << endl;
-			cout << "image list size: " << imageList.size() << endl;
-
-			int i = cloudKeyPoses6D->size() - 1;
-
-			tf::Quaternion tf_q(-0.524045247539, 0.533943315725, -0.47298087709, 0.465371039098);
-			tf::Vector3 tf_trans(0.0911526, 0.0954019, -0.187078);
-			tf::Transform cam_to_lidar_tf_(tf_q, tf_trans);
-
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_sur_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_cor_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-
-			auto temp_cloud1 = projectRGBToCloud(cornerCloudKeyFrames[i], imageList[i], cam_to_lidar_tf_);
-			auto temp_cloud2 = projectRGBToCloud(surfCloudKeyFrames[i], imageList[i], cam_to_lidar_tf_);
-			*rgb_cor_cloud += *transformRGBPointCloud(temp_cloud1, &cloudKeyPoses6D->points[i]);
-			*rgb_sur_cloud += *transformRGBPointCloud(temp_cloud2, &cloudKeyPoses6D->points[i]);
-
-			*rgb_cloud+=*rgb_cor_cloud;
-			*rgb_cloud+=*rgb_sur_cloud;
-
-			// pub rgb_cloud for debug
-
-			sensor_msgs::PointCloud2 tempCloud;
-			pcl::toROSMsg(*rgb_cloud, tempCloud);
-
-			tempCloud.header.stamp = timeLaserInfoStamp;
-			tempCloud.header.frame_id = odometryFrame;
-
-			debugPublisher.publish(tempCloud);
-		}
-	}
+//	void publishRGBCloud(){
+//		if (useImageData){
+//			cout << "pose graph size: " << cloudKeyPoses6D->size() << endl;
+//			cout << "image list size: " << imageList.size() << endl;
+//
+//			int i = cloudKeyPoses6D->size() - 1;
+//
+//			tf::Quaternion tf_q(-0.524045247539, 0.533943315725, -0.47298087709, -0.465371039098);
+//			tf::Vector3 tf_trans(0.0967611, -0.175173, -0.111176);
+//			tf::Transform cam_to_lidar_tf_(tf_q, tf_trans);
+//
+//			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+//			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_sur_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+//			pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_cor_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+//
+//			auto temp_cloud1 = projectRGBToCloud(cornerCloudKeyFrames[i], imageList[i], cam_to_lidar_tf_);
+//			auto temp_cloud2 = projectRGBToCloud(surfCloudKeyFrames[i], imageList[i], cam_to_lidar_tf_);
+//			*rgb_cor_cloud += *transformRGBPointCloud(temp_cloud1, &cloudKeyPoses6D->points[i]);
+//			*rgb_sur_cloud += *transformRGBPointCloud(temp_cloud2, &cloudKeyPoses6D->points[i]);
+//
+//			*rgb_cloud+=*rgb_cor_cloud;
+//			*rgb_cloud+=*rgb_sur_cloud;
+//
+//			// pub rgb_cloud for debug
+//
+//			sensor_msgs::PointCloud2 tempCloud;
+//			pcl::toROSMsg(*rgb_cloud, tempCloud);
+//
+//			tempCloud.header.stamp = timeLaserInfoStamp;
+//			tempCloud.header.frame_id = odometryFrame;
+//
+//			debugPublisher.publish(tempCloud);
+//		}
+//	}
 
 	void publishGlobalMap() {
 		if (pubLaserCloudSurround.getNumSubscribers() == 0)
@@ -1725,6 +1740,10 @@ public:
 		pcl::copyPointCloud(*laserCloudCornerLastDS, *thisCornerKeyFrame);
 		pcl::copyPointCloud(*laserCloudSurfLastDS, *thisSurfKeyFrame);
 
+		pcl::PointCloud<PointType>::Ptr thisWholeFrame(new pcl::PointCloud<PointType>());
+		pcl::copyPointCloud(*wholeCloudLast, *thisWholeFrame);
+		wholeCloudKeyFrames.push_back(thisWholeFrame);
+
 		// save key frame cloud
 		cornerCloudKeyFrames.push_back(thisCornerKeyFrame);
 		surfCloudKeyFrames.push_back(thisSurfKeyFrame);
@@ -1896,7 +1915,7 @@ int main(int argc, char **argv) {
 	std::thread loopthread(&mapOptimization::loopClosureThread, &MO);
 	std::thread visualizeMapThread(&mapOptimization::visualizeGlobalMapThread, &MO);
 
-	std::thread visualizeRGBThread(&mapOptimization::visualizeRGBCloudThread, &MO);
+//	std::thread visualizeRGBThread(&mapOptimization::visualizeRGBCloudThread, &MO);
 
 	ros::spin();
 
